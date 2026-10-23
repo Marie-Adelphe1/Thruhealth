@@ -1,0 +1,20 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ThruHealth//Rappel autopalpation//FR
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:rappel-autopalpation@thruhealth
+DTSTAMP:20261023T090000Z
+DTSTART:20261101T090000
+DTEND:20261101T091000
+RRULE:FREQ=MONTHLY;BYMONTHDAY=1
+SUMMARY:Mon rendez-vous ThruHealth
+DESCRIPTION:5 minutes pour moi.\n1. Devant le miroir\, bras le long du corps puis levés : je regarde la forme\, la peau et les mamelons.\n2. Je palpe chaque sein avec le plat des doigts\, en petits cercles.\n3. Je couvre toute la zone\, jusqu'à l'aisselle.\n4. Je presse doucement le mamelon.\n5. Je recommence en position allongée.\nUn changement ? J'en parle à un médecin.
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Mon rendez-vous ThruHealth
+TRIGGER:-PT10M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
