@@ -12,11 +12,15 @@
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#0b1131">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="logo-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Nunito:wght@400;600;700;800&display=swap">
+  
 <style>
-/* Layout : scène 3D plein écran, interface en surimpression (panneaux en haut, bulle d'Ama en bas, crédit en pied). Look unique : chaleureux dans la chambre, nocturne au-delà du miroir. */
+/* Layout : scène 3D plein écran, interface en surimpression (panneaux en haut, bulle d'Ama en bas, crédit en pied). */
 :root{
   --ink:#2a1a2e;
   --ink-soft:#6e5a68;
@@ -49,6 +53,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .brand{font-family:var(--font-display);font-weight:700;font-size:clamp(2.6rem,9vw,4.4rem);letter-spacing:-.02em;line-height:1;margin:0}
 .brand span{color:var(--coral)}
 .tagline{font-family:var(--font-display);font-weight:500;font-size:clamp(1.05rem,3.6vw,1.3rem);margin:0;opacity:.92;text-wrap:balance}
+.logo-mark{width:84px;height:84px;border-radius:20px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
 .mirror-mark{width:46px;height:72px;border:3px solid #e9c58a;border-radius:50%;box-shadow:0 0 24px rgba(169,220,255,.45),inset 0 0 18px rgba(169,220,255,.5);background:linear-gradient(160deg,rgba(169,220,255,.35),rgba(255,255,255,.05))}
 .title-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:.78rem 1.4rem;font-weight:800;letter-spacing:.01em;background:var(--coral);color:#fff;box-shadow:0 6px 18px rgba(182,58,81,.35);transition:transform .15s ease,background .15s ease;text-decoration:none;font-size:1rem}
@@ -178,7 +183,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 
 <div id="title">
   <div class="title-card">
-    <div class="mirror-mark" aria-hidden="true"></div>
+    <img class="logo-mark" src="favicon.svg" width="84" height="84" alt="">
     <h1 class="brand">Thru<span>Health</span></h1>
     <p class="tagline">À travers ma santé, se connaître au-delà du miroir.</p>
     <button class="btn" id="enter" disabled>Entrer</button>
@@ -264,12 +269,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 <div id="nogl" hidden><p>Ton navigateur n'arrive pas à afficher la 3D. Essaie avec Chrome ou Firefox à jour.</p></div>
 
 <script type="module">
-/* =====================================================================
-   CONTENU DE THRUHEALTH
-   Tous les textes, les ressources de la boîte cadeau et les réponses d'Ama.
-   Pour modifier l'expérience sans toucher à la 3D, change uniquement ce fichier.
-   Garde les guillemets et les virgules en place.
-   ===================================================================== */
+/* CONTENU DE THRUHEALTH */
 const SHARE_URL = location.origin + location.pathname;
 const RESOURCES = [
   { name: 'Vidal — Cancer du sein', text: 'Fiche maladie détaillée : symptômes, diagnostic, traitements.', url: 'https://www.vidal.fr/maladies/cancers/cancer-sein.html', mono: 'V', color: '#c8102e' },
@@ -305,7 +305,7 @@ const LAYERS = [
 ];
 const LAYER_MALE_NOTE = " Les hommes ont aussi un peu de tissu mammaire, juste derrière le mamelon : c'est pour ça qu'ils peuvent être concernés.";
 const MASSES = [
-  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide. Bénin, il peut varier avec le cycle." },
+  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide dont l'aspect peut varier avec le cycle." },
   { name: 'Fibroadénome', feel: 'Ferme, lisse, comme du caoutchouc, très mobile.', ama: "Une boule bénigne, fréquente chez les jeunes femmes." },
   { name: 'Tumeur cancéreuse', feel: 'Souvent dure, aux contours irréguliers, fixée, en général indolore.', ama: "Elle peut tirer sur la peau ou le mamelon. Plus elle est trouvée tôt, mieux elle se soigne." }
 ];
@@ -336,6 +336,11 @@ const SCREEN = {
     ]
   }
 };
+// Musique de fond
+// Si le fichier n'existe pas, ThruHealth joue sa musique douce générée automatiquement.
+
+const MUSIC_FILE = 'musique.mp3';
+const MUSIC_VOLUME = 0.4;
 const SPEECH_FIX = [[/ThruHealth/g, 'Throu Hèlth'], [/Prêt·e/g, 'Prête, ou prêt'], [/allongé·e/g, 'allongée'], [/1er/g, 'premier'], [/« | »/g, '']];
 
 import * as THREE from 'three';
@@ -457,6 +462,20 @@ function initAudio() {
       });
     };
     step(); setInterval(step, 8000);
+    if (MUSIC_FILE) {
+      const el = new Audio(MUSIC_FILE);
+      el.loop = true; el.preload = 'auto';
+      const fg = ctx.createGain(); fg.gain.value = MUSIC_VOLUME * 2.5;
+      ctx.createMediaElementSource(el).connect(fg); fg.connect(sound.music);
+      el.addEventListener('playing', () => {
+        if (sound.file) return;
+        sound.file = el;
+        sound.voices.forEach(v => { try { v.a.stop(); v.b.stop(); } catch (e) { } });
+      }, { once: true });
+      el.addEventListener('error', () => { }, { once: true });
+      sound.fileEl = el;
+      el.play().catch(() => { });
+    }
   } catch (e) { sound.ctx = null; }
 }
 function musicLevel() { return sound.on ? (sound.ducked ? .16 : .34) : 0; }
@@ -468,7 +487,7 @@ function setMood(m) {
 function setSound(on) {
   sound.on = on;
   const b = $('#sound'); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.setAttribute('aria-label', on ? 'Son activé' : 'Son coupé');
-  if (on) { initAudio(); sound.ctx?.resume?.(); } else stopSpeech();
+  if (on) { initAudio(); sound.ctx?.resume?.(); if (sound.file) sound.file.play().catch(() => { }); } else { stopSpeech(); if (sound.file) sound.file.pause(); }
   if (sound.ctx) sound.music.gain.setTargetAtTime(musicLevel(), sound.ctx.currentTime, .5);
 }
 function chime() {
