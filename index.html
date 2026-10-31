@@ -306,7 +306,7 @@ const LAYERS = [
 ];
 const LAYER_MALE_NOTE = " Les hommes ont aussi un peu de tissu mammaire, juste derrière le mamelon : c'est pour ça qu'ils peuvent être concernés.";
 const MASSES = [
-  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide. Bénin, il peut varier avec le cycle." },
+  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide dont la taille peut varier avec le cycle." },
   { name: 'Fibroadénome', feel: 'Ferme, lisse, comme du caoutchouc, très mobile.', ama: "Une boule bénigne, fréquente chez les jeunes femmes." },
   { name: 'Tumeur cancéreuse', feel: 'Souvent dure, aux contours irréguliers, fixée, en général indolore.', ama: "Elle peut tirer sur la peau ou le mamelon. Plus elle est trouvée tôt, mieux elle se soigne." }
 ];
@@ -340,6 +340,7 @@ const SCREEN = {
 // Musique de fond 
 const MUSIC_FILE = 'musique.mp3';
 const MUSIC_VOLUME = 0.2;
+const VOICE_SPEED = 1.4;
 const SPEECH_FIX = [[/ThruHealth/g, 'Throu Helth'], [/Prêt·e/g, 'Prête, ou prêt'], [/allongé·e/g, 'allongée'], [/1er/g, 'premier'], [/« | »/g, '']];
 
 import * as THREE from 'three';
@@ -407,26 +408,39 @@ if ('speechSynthesis' in window) {
   sound.voice = pickVoice();
   speechSynthesis.onvoiceschanged = () => { sound.voice = pickVoice(); };
 }
-let speechId = 0;
-function speak(text) {
-  if (!sound.on || !('speechSynthesis' in window)) return;
+let speechId = 0, speechCb = null;
+const speechText = t => { for (const [a, b] of SPEECH_FIX) t = t.replace(a, b); return t; };
+function speak(text, cb = {}) {
+  const prev = speechCb; speechCb = null; prev?.cut?.();
+  if (!sound.on || !('speechSynthesis' in window)) { cb.fail?.(); return; }
   const id = ++speechId;
+  speechCb = cb;
   speechSynthesis.cancel();
-  let t = text; for (const [a, b] of SPEECH_FIX) t = t.replace(a, b);
-  const parts = (t.match(/[^.!?…]+[.!?…]*/g) || [t]).map(x => x.trim()).filter(Boolean);
+  duck(true);
+  const parts = [], re = /[^.!?…]+[.!?…]*\s*/g;
+  let m;
+  while ((m = re.exec(text))) if (m[0].trim()) parts.push({ start: m.index, end: m.index + m[0].length, say: speechText(m[0].trim()) });
+  if (!parts.length) parts.push({ start: 0, end: text.length, say: speechText(text) });
+  let started = false;
+  const done = () => { if (id !== speechId) return; speechCb = null; duck(false); $('#amadot').classList.remove('talk'); cb.end?.(); };
+  const guard = setTimeout(() => { if (id === speechId && !started) { duck(false); cb.fail?.(); } }, 2500);
+  sound.utts = [];
   setTimeout(() => {
     if (id !== speechId) return;
-    parts.forEach((pt, i) => {
-      const u = new SpeechSynthesisUtterance(pt);
+    parts.forEach((p, i) => {
+      const u = new SpeechSynthesisUtterance(p.say);
       u.lang = 'fr-FR'; if (sound.voice) u.voice = sound.voice;
-      u.rate = 1; u.pitch = 1.08;
-      if (i === 0) u.onstart = () => { if (id === speechId) { duck(true); $('#amadot').classList.add('talk'); } };
-      if (i === parts.length - 1) u.onend = u.onerror = () => { if (id === speechId) { duck(false); $('#amadot').classList.remove('talk'); } };
+      u.rate = VOICE_SPEED; u.pitch = 1.08; u.volume = 1;
+      u.onstart = () => { if (id !== speechId) return; if (!started) { started = true; clearTimeout(guard); duck(true); } $('#amadot').classList.add('talk'); cb.sentence?.(p.start, p.end); };
+      u.onboundary = (e) => { if (id !== speechId) return; cb.at?.(p.start + Math.round(e.charIndex * (p.end - p.start) / Math.max(1, p.say.length))); };
+      u.onend = () => { if (i === parts.length - 1) done(); };
+      u.onerror = (e) => { if (id !== speechId || e.error === 'interrupted' || e.error === 'canceled') return; if (!started) { clearTimeout(guard); duck(false); cb.fail?.(); } else if (i === parts.length - 1) done(); };
+      sound.utts.push(u);
       speechSynthesis.speak(u);
     });
-  }, 90);
+  }, 120);
 }
-function stopSpeech() { speechId++; if ('speechSynthesis' in window) speechSynthesis.cancel(); duck(false); $('#amadot').classList.remove('talk'); }
+function stopSpeech() { const prev = speechCb; speechCb = null; speechId++; if ('speechSynthesis' in window) speechSynthesis.cancel(); duck(false); $('#amadot').classList.remove('talk'); prev?.cut?.(); }
 const CHORDS = {
   room: [[196.0, 246.9, 293.7, 370.0], [174.6, 220.0, 261.6, 329.6], [164.8, 207.7, 246.9, 329.6], [174.6, 220.0, 261.6, 349.2]],
   beyond: [[220.0, 261.6, 329.6, 493.9], [196.0, 246.9, 293.7, 440.0], [174.6, 220.0, 293.7, 440.0], [196.0, 261.6, 329.6, 392.0]]
@@ -464,7 +478,7 @@ function initAudio() {
     if (MUSIC_FILE) {
       const el = new Audio(MUSIC_FILE);
       el.loop = true; el.preload = 'auto';
-      const fg = ctx.createGain(); fg.gain.value = MUSIC_VOLUME * 2.5;
+      const fg = ctx.createGain(); fg.gain.value = MUSIC_VOLUME * 1.5;
       ctx.createMediaElementSource(el).connect(fg); fg.connect(sound.music);
       el.addEventListener('playing', () => {
         if (sound.file) return;
@@ -477,8 +491,8 @@ function initAudio() {
     }
   } catch (e) { sound.ctx = null; }
 }
-function musicLevel() { return sound.on ? (sound.ducked ? .16 : .34) : 0; }
-function duck(on) { sound.ducked = on; if (sound.ctx) sound.music.gain.setTargetAtTime(musicLevel(), sound.ctx.currentTime, .3); }
+function musicLevel() { return sound.on ? (sound.ducked ? .06 : .34) : 0; }
+function duck(on) { sound.ducked = on; if (sound.ctx) sound.music.gain.setTargetAtTime(musicLevel(), sound.ctx.currentTime, on ? .08 : .5); }
 function setMood(m) {
   sound.mood = m;
   if (sound.ctx) sound.filter.frequency.setTargetAtTime(m === 'beyond' ? 2600 : 1700, sound.ctx.currentTime, 1);
@@ -1348,15 +1362,20 @@ function setSignMode() {
 
 /* ---------- Interface ---------- */
 const bubble = $('#bubble'), sayEl = $('#say'), actionsEl = $('#actions');
-let typing = null;
+let typing = null, sayId = 0;
 function say(text, actions = []) {
+  const id = ++sayId;
   bubble.classList.add('on');
   actionsEl.innerHTML = '';
-  if (typing) clearInterval(typing);
+  clearInterval(typing); typing = null;
   sayEl.textContent = '';
-  speak(text);
   return new Promise(resolve => {
+    let shown = 0, target = 0, synced = false, finished = false, late = null;
+    const render = () => { sayEl.textContent = text.slice(0, shown); };
     const showActions = () => {
+      if (finished || id !== sayId) return;
+      finished = true; clearInterval(typing); typing = null; clearTimeout(late);
+      shown = text.length; render();
       for (const a of actions) {
         let b;
         if (a.href) {
@@ -1372,13 +1391,28 @@ function say(text, actions = []) {
       }
       if (!actions.length) resolve();
     };
-    if (reduce) { sayEl.textContent = text; showActions(); return; }
-    let i = 0;
-    typing = setInterval(() => {
-      i += 2; sayEl.textContent = text.slice(0, i);
-      if (i >= text.length) { clearInterval(typing); typing = null; showActions(); }
-    }, 24);
-    bubble.onclick = (e) => { if (typing && !e.target.closest('button,a')) { clearInterval(typing); typing = null; sayEl.textContent = text; showActions(); } };
+    const run = (ms) => {
+      clearInterval(typing);
+      typing = setInterval(() => {
+        if (id !== sayId) { clearInterval(typing); return; }
+        if (shown < target) { shown++; render(); }
+        else if (shown >= text.length) {
+          clearInterval(typing); typing = null;
+          if (!synced) showActions(); else if (!late) late = setTimeout(showActions, 4000);
+        }
+      }, ms);
+    };
+    const fast = () => { if (finished || id !== sayId) return; synced = false; target = text.length; run(14); };
+    if (reduce) { showActions(); speak(text); return; }
+    bubble.onclick = (e) => { if (!finished && !e.target.closest('button,a')) showActions(); };
+    if (!sound.on || !('speechSynthesis' in window)) { fast(); return; }
+    speak(text, {
+      sentence: (start, end) => { if (finished || id !== sayId) return; synced = true; shown = Math.max(shown, start); target = end; render(); run(Math.round(62 / VOICE_SPEED)); },
+      at: (i) => { if (finished || id !== sayId) return; if (i > shown) { shown = Math.min(i, target); render(); } },
+      end: () => showActions(),
+      fail: () => fast(),
+      cut: () => showActions()
+    });
   });
 }
 function hideBubble() { bubble.classList.remove('on'); stopSpeech(); }
