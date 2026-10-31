@@ -18,7 +18,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Nunito:wght@400;600;700;800&display=swap">
-  
 <style>
 /* Layout : scène 3D plein écran, interface en surimpression (panneaux en haut, bulle d'Ama en bas, crédit en pied). */
 :root{
@@ -269,7 +268,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 <div id="nogl" hidden><p>Ton navigateur n'arrive pas à afficher la 3D. Essaie avec Chrome ou Firefox à jour.</p></div>
 
 <script type="module">
-/* CONTENU DE THRUHEALTH */
+  
+/* CONTENU DE THRUHEALTH
+   Tous les textes, les ressources de la boîte cadeau et les réponses d'Ama. */
 const SHARE_URL = location.origin + location.pathname;
 const RESOURCES = [
   { name: 'Vidal — Cancer du sein', text: 'Fiche maladie détaillée : symptômes, diagnostic, traitements.', url: 'https://www.vidal.fr/maladies/cancers/cancer-sein.html', mono: 'V', color: '#c8102e' },
@@ -305,7 +306,7 @@ const LAYERS = [
 ];
 const LAYER_MALE_NOTE = " Les hommes ont aussi un peu de tissu mammaire, juste derrière le mamelon : c'est pour ça qu'ils peuvent être concernés.";
 const MASSES = [
-  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide dont l'aspect peut varier avec le cycle." },
+  { name: 'Kyste', feel: 'Rond, lisse, souple, il roule sous le doigt, parfois sensible.', ama: "Une petite poche de liquide. Bénin, il peut varier avec le cycle." },
   { name: 'Fibroadénome', feel: 'Ferme, lisse, comme du caoutchouc, très mobile.', ama: "Une boule bénigne, fréquente chez les jeunes femmes." },
   { name: 'Tumeur cancéreuse', feel: 'Souvent dure, aux contours irréguliers, fixée, en général indolore.', ama: "Elle peut tirer sur la peau ou le mamelon. Plus elle est trouvée tôt, mieux elle se soigne." }
 ];
@@ -336,12 +337,10 @@ const SCREEN = {
     ]
   }
 };
-// Musique de fond
-// Si le fichier n'existe pas, ThruHealth joue sa musique douce générée automatiquement.
-
+// Musique de fond 
 const MUSIC_FILE = 'musique.mp3';
 const MUSIC_VOLUME = 0.2;
-const SPEECH_FIX = [[/ThruHealth/g, 'Throu Hèlth'], [/Prêt·e/g, 'Prête, ou prêt'], [/allongé·e/g, 'allongée'], [/1er/g, 'premier'], [/« | »/g, '']];
+const SPEECH_FIX = [[/ThruHealth/g, 'Throu Helth'], [/Prêt·e/g, 'Prête, ou prêt'], [/allongé·e/g, 'allongée'], [/1er/g, 'premier'], [/« | »/g, '']];
 
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
@@ -900,19 +899,30 @@ function cylUV(geo, rep = [4, 3]) {
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
+const lipColor = skin => new THREE.Color(skin).multiplyScalar(.7).lerp(new THREE.Color('#7a3434'), .3);
+// les deux avatars sont préparés à l'avance, pendant que la personne lit, pour éviter toute attente
+const avatarCache = {};
+function buildAvatar(kind) {
+  const f = kind === 'femme';
+  return makePerson({ skin: SKINS[3], top: f ? '#c98a9a' : '#7d93a6', bottom: f ? '#3b3350' : '#2f3a48', hair: '#1a0f0c', kind });
+}
+function prebuildAvatars() {
+  if (!avatarCache.femme) avatarCache.femme = buildAvatar('femme');
+  setTimeout(() => { if (!avatarCache.homme) avatarCache.homme = buildAvatar('homme'); }, 250);
+}
 function makePerson({ skin, top, bottom, hair, kind, ama = false }) {
   const male = kind === 'homme';
   const g = new THREE.Group();
   const mats = [];
   const mk = (o) => { const m = new THREE.MeshStandardMaterial(o); mats.push(m); return m; };
-  const mSkin = mk({ color: skin, roughness: .55 });
+  const mSkin = mk({ color: skin, roughness: .55 }); mSkin.name = 'skin';
   const mTop = top.isTexture ? mk({ map: top, roughness: .8 }) : mk({ color: top, roughness: .8 });
   const mBot = mk({ color: bottom, roughness: .85, side: THREE.DoubleSide });
   const mShoe = mk({ color: male ? '#3a2a22' : '#5a2230', roughness: .45 });
   const mHair = mk({ color: hair, roughness: .9 });
   const mWhite = mk({ color: '#f4eee8', roughness: .25 });
   const mIris = mk({ color: '#2b160e', roughness: .15 });
-  const mLip = mk({ color: new THREE.Color(skin).multiplyScalar(.7).lerp(new THREE.Color('#7a3434'), .3), roughness: .4 });
+  const mLip = mk({ color: lipColor(skin), roughness: .4 }); mLip.name = 'lip';
   const mBrow = mk({ color: '#1a0f0c', roughness: .9 });
 
   const { J, P } = bodyRig(male);
@@ -1076,6 +1086,14 @@ function moveCamera(pos, target, dur) {
 
 /* ---------- Au-delà du miroir ---------- */
 let beyond = null, controls = null, spinT = 0, chapter = '';
+function hash3(x, y, z) { const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return s - Math.floor(s); }
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const L = (a, b, t) => a + (b - a) * t;
+  const c = (i, j, k) => hash3(xi + i, yi + j, zi + k);
+  return L(L(L(c(0, 0, 0), c(1, 0, 0), u), L(c(0, 1, 0), c(1, 1, 0), u), v), L(L(c(0, 0, 1), c(1, 0, 1), u), L(c(0, 1, 1), c(1, 1, 1), u), v), w) * 2 - 1;
+}
 function fresnelMat(color, power = 2.2, intensity = 1.2) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -1101,73 +1119,149 @@ function buildBeyond() {
     mesh.traverse(o => { if (o.isMesh) { o.userData.layer = li; pick.push(o); } });
     return mesh;
   };
-  /* --- chapitre 1 et 3 : le buste --- */
+  /* --- chapitre 1 et 3 : le buste, façon planche d'anatomie --- */
   const bust = new THREE.Group(); s.add(bust);
-  const skinGlow = new THREE.Color(choice.skin).lerp(new THREE.Color('#ffd9c9'), .5);
-  const shell = fresnelMat(skinGlow, 2.0, 1.1);
-  const torso = new THREE.Mesh(lathe(female
+  const key = new THREE.DirectionalLight('#fff1e6', 1.7); key.position.set(1.5, 2, 3); s.add(key);
+  const rimL = new THREE.DirectionalLight('#9fc8ff', 1.2); rimL.position.set(-2.5, 1, -2); s.add(rimL);
+  s.add(new THREE.AmbientLight('#8090c0', .45));
+  const skinCol = new THREE.Color(choice.skin);
+  const skinGlow = skinCol.clone().lerp(new THREE.Color('#ffd9c9'), .5);
+  const glass = (color, opacity, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: .32, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, clearcoat: .7, clearcoatRoughness: .25, ...extra });
+  const solid = (color, opacity, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .45, transparent: true, opacity, ...extra });
+  const prof = female
     ? [[0, -.9], [.52, -.88], [.5, -.5], [.47, -.2], [.5, .1], [.56, .4], [.62, .55], [.55, .68], [.32, .78], [.17, .85], [.16, 1.1]]
-    : [[0, -.9], [.55, -.88], [.53, -.5], [.52, -.2], [.56, .1], [.62, .4], [.68, .55], [.6, .68], [.34, .78], [.19, .85], [.18, 1.1]], 48), shell);
-  torso.scale.z = .62; bust.add(torso); reg(torso, 0, shell);
-  const lobMat = fresnelMat('#ff7f99', 1.2, 1.6);
-  const ductMat = new THREE.MeshBasicMaterial({ color: '#ff9fb2', transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });
-  const nodeMat = fresnelMat('#7ff0c8', 1.1, 1.8);
-  const vesselMat = new THREE.MeshBasicMaterial({ color: '#7ff0c8', transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false });
-  const fatMat = fresnelMat('#ffd27a', 1.6, .9);
-  const ligMat = new THREE.MeshBasicMaterial({ color: '#e8f0ff', transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false });
-  const muscleMat = fresnelMat('#ff5a5a', 1.3, 1.2);
-  const ribMat = new THREE.MeshBasicMaterial({ color: '#d9d4ff', transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false });
+    : [[0, -.9], [.55, -.88], [.53, -.5], [.52, -.2], [.56, .1], [.62, .4], [.68, .55], [.6, .68], [.34, .78], [.19, .85], [.18, 1.1]];
+  const Rof = y => { for (let i = 1; i < prof.length; i++) if (y <= prof[i][1]) { const [r0, y0] = prof[i - 1], [r1, y1] = prof[i]; return r0 + (r1 - r0) * (y - y0) / (y1 - y0); } return prof.at(-1)[0]; };
+  const zSurf = (x, y) => .62 * Math.sqrt(Math.max(0, Rof(y) ** 2 - x * x));
+  const torsoGeo = lathe(prof, 72);
+  const skinGlass = glass(skinCol, .18);
+  const shell = fresnelMat(skinGlow, 2.0, 1.1);
+  const torso = new THREE.Mesh(torsoGeo, skinGlass); torso.scale.z = .62; bust.add(torso); reg(torso, 0, skinGlass);
+  const torsoRim = new THREE.Mesh(torsoGeo, shell); torsoRim.scale.z = .62; bust.add(torsoRim); reg(torsoRim, 0, shell);
+  const fiberTex = canvasTex(256, 256, (g, w, h) => {
+    for (let x = 0; x < w; x += 2) { const l = 38 + Math.sin(x * .7) * 6 + rnd() * 10; g.fillStyle = `hsl(4,58%,${l}%)`; g.fillRect(x, 0, 2, h); }
+    g.globalAlpha = .25; g.fillStyle = '#fff3ee'; for (let x = 0; x < w; x += 9 + rnd() * 6) g.fillRect(x, 0, 1, h); g.globalAlpha = 1;
+  });
+  const fatMat = solid('#f2cf73', .88, { emissive: '#5a3d00', emissiveIntensity: .18, roughness: .38 });
+  const lobMat = solid('#e57b94', .96, { emissive: '#5a1020', emissiveIntensity: .25, roughness: .36 });
+  const ductMat = solid('#f6b3c0', .95, { emissive: '#5a1828', emissiveIntensity: .2 });
+  const ligMat = solid('#f6f2ea', .8, { emissive: '#333333', emissiveIntensity: .2 });
+  const nodeMat = new THREE.MeshPhysicalMaterial({ color: '#86d9b0', roughness: .3, transparent: true, opacity: .96, clearcoat: .6, emissive: '#0c3a26', emissiveIntensity: .3 });
+  const vesselMat = solid('#9be6c4', .85, { emissive: '#0c3a26', emissiveIntensity: .25 });
+  const muscleMat = solid('#ffffff', .95, { map: fiberTex, roughness: .55, side: THREE.DoubleSide, emissive: '#3a0805', emissiveIntensity: .25 });
+  const ribMat = solid('#efe6d6', .95, { roughness: .5 });
+  const cartMat = solid('#cfe3ec', .9, { roughness: .3 });
+  const sphere = new THREE.SphereGeometry(1, 14, 10);
+  const dummy = new THREE.Object3D();
+  const instanced = (n, mat, place) => {
+    const im = new THREE.InstancedMesh(sphere, mat, n);
+    for (let i = 0; i < n; i++) { place(i, dummy); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }
+    im.instanceMatrix.needsUpdate = true; return im;
+  };
+  const tube = (pts, r, mat) => new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.max(8, pts.length * 6), r, 6), mat);
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const parts = {};
   [-1, 1].forEach(sd => {
-    const C = new THREE.Vector3(sd * .29, .12, female ? .27 : .25);
-    const skinMat = fresnelMat(skinGlow, 2.0, 1.1);
-    const br = new THREE.Mesh(new THREE.SphereGeometry(female ? .27 : .2, 40, 28), skinMat);
-    br.position.copy(C); br.scale.set(1, .95, female ? .85 : .3); bust.add(br); reg(br, 0, skinMat);
-    const nipZ = female ? C.z + .27 * .85 : C.z + .2 * .3;
-    const nip = new THREE.Mesh(new THREE.SphereGeometry(.022, 16, 12), fresnelMat('#ffb3a1', 1, 2.2)); nip.position.set(C.x, C.y - .01, nipZ); bust.add(nip); reg(nip, 0);
-    const areola = new THREE.Mesh(new THREE.CircleGeometry(.055, 32), new THREE.MeshBasicMaterial({ color: '#c96f63', transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false }));
-    areola.position.set(C.x, C.y - .01, nipZ - .004); bust.add(areola); reg(areola, 0);
-    const fat = new THREE.Mesh(new THREE.SphereGeometry(female ? .23 : .15, 32, 24), fatMat);
-    fat.position.copy(C).add(new THREE.Vector3(0, 0, -.01)); fat.scale.set(1, .95, female ? .8 : .3); bust.add(fat); reg(fat, 1, fatMat);
-    for (let i = 0; i < 6; i++) {
-      const a = i / 6 * Math.PI * 2;
-      const p0 = new THREE.Vector3(C.x + Math.cos(a) * .12, C.y + Math.sin(a) * .12, C.z - (female ? .16 : .05));
-      const p2 = new THREE.Vector3(C.x + Math.cos(a) * (female ? .2 : .14), C.y + Math.sin(a) * (female ? .2 : .14), C.z + (female ? .1 : .03));
-      const p1 = p0.clone().lerp(p2, .5).add(new THREE.Vector3(Math.cos(a) * .04, Math.sin(a) * .04, 0));
-      const t = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([p0, p1, p2]), 16, .005, 5), ligMat); bust.add(t); reg(t, 2, ligMat);
+    const C = V(sd * .29, .12, female ? .27 : .25);
+    const R = female ? .27 : .2, zs = female ? .85 : .3;
+    const skinMat = glass(skinCol, .22);
+    const br = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 32), skinMat);
+    br.position.copy(C); br.scale.set(1, .95, zs); bust.add(br); reg(br, 0, skinMat);
+    const brRim = new THREE.Mesh(br.geometry, fresnelMat(skinGlow, 2.2, 1.0)); br.add(brRim); reg(brRim, 0);
+    const nipZ = C.z + R * zs;
+    const areolaC = skinCol.clone().multiplyScalar(.58).lerp(new THREE.Color('#7a3a30'), .3);
+    const areola = new THREE.Mesh(new THREE.CircleGeometry(female ? .05 : .03, 40), solid(areolaC, .92, { roughness: .6 }));
+    areola.position.set(C.x, C.y - .01, nipZ - .003); bust.add(areola); reg(areola, 0);
+    const nip = new THREE.Mesh(new THREE.SphereGeometry(female ? .016 : .01, 20, 14), solid(areolaC.clone().multiplyScalar(.85), .98, { roughness: .5 }));
+    nip.scale.set(1, 1, .9); nip.position.set(C.x, C.y - .01, nipZ); bust.add(nip); reg(nip, 0);
+    // graisse : des centaines de petits lobules jaunes
+    const fat = new THREE.Group(); fat.position.copy(C); fat.scale.set(1, .95, female ? .8 : .3); bust.add(fat);
+    const nFat = female ? 280 : 80;
+    const fatIm = instanced(nFat, fatMat, (i, d) => {
+      let x, y, z; do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; } while (x * x + y * y + z * z > 1 || z < -.3);
+      const rr = .2 * (R / .27);
+      d.position.set(x * rr, y * rr, z * rr); d.scale.setScalar((female ? .022 : .018) + rnd() * .022);
+    });
+    fat.add(fatIm); reg(fat, 1, fatMat);
+    // ligaments de Cooper : des attaches fines de la paroi vers la peau
+    const nLig = female ? 12 : 6;
+    for (let i = 0; i < nLig; i++) {
+      const a = i / nLig * Math.PI * 2 + rnd() * .3, rr = R * (.55 + rnd() * .3);
+      const p0 = V(C.x + Math.cos(a) * rr * .5, C.y + Math.sin(a) * rr * .5, C.z - R * zs * .55);
+      const p2 = V(C.x + Math.cos(a) * rr, C.y + Math.sin(a) * rr * .95, C.z + R * zs * .75);
+      const p1 = p0.clone().lerp(p2, .55).add(V(Math.cos(a) * .02, Math.sin(a) * .02, 0));
+      const t1 = tube([p0, p1, p2], .0035, ligMat); bust.add(t1); reg(t1, 2, ligMat);
+      const p3 = p2.clone().add(V(Math.cos(a + .6) * .04, Math.sin(a + .6) * .04, -.01));
+      const t2 = tube([p1, p1.clone().lerp(p3, .5), p3], .0025, ligMat); bust.add(t2); reg(t2, 2, ligMat);
     }
-    const nipP = nip.position.clone().add(new THREE.Vector3(0, 0, -.02));
-    const lobes = female ? 7 : 3;
-    for (let i = 0; i < lobes; i++) {
-      const a = i / lobes * Math.PI * 2 + rnd() * .3;
-      const rad = female ? .15 + rnd() * .05 : .06;
-      const lp = new THREE.Vector3(C.x + Math.cos(a) * rad, C.y + Math.sin(a) * rad, C.z + (female ? .03 : .01) - rnd() * .05);
-      const cl = new THREE.Group(); cl.position.copy(lp); bust.add(cl);
-      for (let j = 0; j < 5; j++) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(female ? .026 : .014, 12, 10), lobMat);
-        m.position.set((rnd() - .5) * .06, (rnd() - .5) * .06, (rnd() - .5) * .05); cl.add(m);
+    // lobes : canaux galactophores qui convergent vers le mamelon, grappes de lobules au bout
+    const Np = V(C.x, C.y - .01, nipZ - .012);
+    const nLobe = female ? 15 : 4, lobPts = [];
+    const ducts = new THREE.Group(); bust.add(ducts);
+    for (let i = 0; i < nLobe; i++) {
+      const a = i / nLobe * Math.PI * 2 + rnd() * .25;
+      const reach = female ? .15 + rnd() * .05 : .05;
+      const Lc = V(C.x + Math.cos(a) * reach, C.y + Math.sin(a) * reach * .95, C.z + (female ? -.02 : .0) - rnd() * .05);
+      const sinus = Np.clone().lerp(Lc, .18); sinus.z -= .005;
+      const mid = Np.clone().lerp(Lc, .55); mid.z += female ? .03 : .008;
+      ducts.add(tube([Np, sinus, mid, Lc], female ? .0048 : .0032, ductMat));
+      const sn = new THREE.Mesh(sphere, ductMat); sn.position.copy(sinus); sn.scale.set(.008, .008, .012).multiplyScalar(female ? 1 : .6); ducts.add(sn);
+      const nb = female ? 6 : 2;
+      for (let b = 0; b < nb; b++) {
+        const tip = Lc.clone().add(V((rnd() - .5) * .07, (rnd() - .5) * .07, (rnd() - .5) * .05));
+        ducts.add(tube([Lc, Lc.clone().lerp(tip, .5).add(V(0, 0, .006)), tip], .0022, ductMat));
+        lobPts.push(tip);
       }
-      reg(cl, 3, lobMat);
-      const mid = lp.clone().lerp(nipP, .5); mid.z += .02;
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([lp, mid, nipP]), 20, female ? .007 : .005, 6), ductMat);
-      bust.add(tube); reg(tube, 3, ductMat);
     }
-    const nodes = [];
-    for (let i = 0; i < 5; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(.026 + rnd() * .01, 12, 10), nodeMat);
-      m.position.set(sd * (.56 + rnd() * .1), .28 + rnd() * .16, .04 + rnd() * .1); bust.add(m); reg(m, 4, nodeMat); nodes.push(m.position.clone());
+    reg(ducts, 3, ductMat);
+    const perCl = female ? 11 : 6;
+    const lob = instanced(lobPts.length * perCl, lobMat, (i, d) => {
+      const c0 = lobPts[Math.floor(i / perCl)];
+      d.position.set(c0.x + (rnd() - .5) * .028, c0.y + (rnd() - .5) * .028, c0.z + (rnd() - .5) * .022);
+      d.scale.setScalar((female ? .0075 : .005) + rnd() * .005);
+    });
+    bust.add(lob); reg(lob, 3, lobMat);
+    // ganglions de l'aisselle et vaisseaux lymphatiques
+    const chain = [V(C.x + sd * .16, C.y + .06, C.z - .02), V(sd * .52, .28, .12), V(sd * .6, .4, .07), V(sd * .56, .55, .03), V(sd * .42, .66, .05)];
+    const nodes = new THREE.Group(); bust.add(nodes);
+    for (let i = 1; i < chain.length; i++) {
+      for (let k = 0; k < 2; k++) {
+        const p = chain[i - 1].clone().lerp(chain[i], .4 + k * .45).add(V((rnd() - .5) * .04, (rnd() - .5) * .03, (rnd() - .5) * .03));
+        const m = new THREE.Mesh(sphere, nodeMat); m.position.copy(p); m.scale.set(.03, .018, .02).multiplyScalar(.8 + rnd() * .5); m.rotation.z = rnd() * 3; nodes.add(m);
+      }
     }
-    const v = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(C.x + sd * .15, C.y + .05, C.z), new THREE.Vector3(sd * .5, .25, .15), nodes[0], nodes[2]]), 30, .006, 6), vesselMat);
-    bust.add(v); reg(v, 4, vesselMat);
-    const mus = new THREE.Mesh(new THREE.SphereGeometry(.3, 32, 20), muscleMat);
-    mus.position.set(sd * .3, .2, .04); mus.scale.set(1.35, 1.05, .22); bust.add(mus); reg(mus, 5, muscleMat);
+    reg(nodes, 4, nodeMat);
+    const lv = tube(chain, .0045, vesselMat); bust.add(lv); reg(lv, 4, vesselMat);
+    const lv2 = tube([V(C.x + sd * .08, C.y - .1, C.z + .04), V(C.x + sd * .2, C.y - .02, C.z - .02), chain[1]], .0035, vesselMat); bust.add(lv2); reg(lv2, 4, vesselMat);
+    // grand pectoral : un éventail de fibres du sternum et de la clavicule vers le bras
+    const O = [];
+    for (let i = 0; i <= 8; i++) { const y = -.08 + i * .07; O.push([sd * .045, y]); }
+    for (let i = 1; i <= 5; i++) O.push([sd * (.045 + i * .07), .56 + i * .012]);
+    const I = [sd * .58, .42];
+    const nu = O.length - 1, nv = 14, vp = [], uv = [], idx = [];
+    for (let u = 0; u <= nu; u++) for (let v = 0; v <= nv; v++) {
+      const t = v / nv, tt = Math.pow(t, 1.15);
+      const x = O[u][0] + (I[0] - O[u][0]) * tt, y = O[u][1] + (I[1] - O[u][1]) * tt;
+      const z = zSurf(x, y) - .035 + .02 * Math.sin(Math.PI * t);
+      vp.push(x, y, z); uv.push(u / nu * 6, t);
+    }
+    for (let u = 0; u < nu; u++) for (let v = 0; v < nv; v++) { const a = u * (nv + 1) + v, b = a + nv + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+    const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3)); mg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); mg.setIndex(idx); mg.computeVertexNormals();
+    const mus = new THREE.Mesh(mg, muscleMat); bust.add(mus); reg(mus, 5, muscleMat);
+    // côtes et cartilages costaux
+    for (let k = 0; k < 7; k++) {
+      const y0 = .5 - k * .11, pts = [], cart = [];
+      for (let j = 0; j <= 12; j++) {
+        const th = j / 12 * Math.PI * .62, Rr = Rof(y0) * .86;
+        const p = V(sd * (.05 + Rr * Math.sin(th)), y0 - .09 * th, .62 * Rr * Math.cos(th) - .06);
+        (j <= 3 ? cart : pts).push(p); if (j === 3) pts.push(p);
+      }
+      const rb = tube(pts, .016, ribMat); bust.add(rb); reg(rb, 5, ribMat);
+      const cb = tube(cart, .013, cartMat); bust.add(cb); reg(cb, 5, cartMat);
+    }
     parts[sd] = { C, br, nip, fat, skinMat, nipZ };
   });
-  for (let i = 0; i < 5; i++) {
-    const rib = new THREE.Mesh(new THREE.TorusGeometry(.5 - i * .01, .012, 6, 48, Math.PI * .9), ribMat);
-    rib.rotation.set(Math.PI / 2 + .25, 0, Math.PI * .05);
-    rib.scale.set(1, .62, 1); rib.position.set(0, .45 - i * .16, -.05); bust.add(rib); reg(rib, 5, ribMat);
-  }
+  const sternum = new THREE.Mesh(new THREE.CapsuleGeometry(.032, .62, 6, 12), solid('#efe6d6', .95)); sternum.position.set(0, .2, zSurf(0, .2) - .06); sternum.scale.z = .5; bust.add(sternum); reg(sternum, 5);
   // signes (chapitre 3), cachés au départ
   const sd = -1, P = parts[sd];
   const sg = {};
@@ -1176,31 +1270,47 @@ function buildBeyond() {
   sg.orange.material.uniforms.uMap.value = dotsTex; sg.orange.material.uniforms.uUseMap.value = 1;
   sg.orange.position.copy(P.C); sg.orange.scale.copy(P.br.scale); bust.add(sg.orange);
   sg.red = new THREE.Mesh(new THREE.SphereGeometry(female ? .28 : .21, 40, 28), fresnelMat('#ff3030', .7, 1.6)); sg.red.position.copy(P.C); sg.red.scale.copy(P.br.scale); bust.add(sg.red);
-  sg.drop = new THREE.Mesh(new THREE.SphereGeometry(.018, 12, 10), fresnelMat('#ffe9a8', .6, 2.6)); bust.add(sg.drop);
+  sg.drop = new THREE.Mesh(new THREE.SphereGeometry(.014, 12, 10), new THREE.MeshPhysicalMaterial({ color: '#fff3c4', roughness: .05, clearcoat: 1, transparent: true, opacity: .9 })); bust.add(sg.drop);
   sg.ring = new THREE.Mesh(new THREE.TorusGeometry(.06, .008, 8, 40), new THREE.MeshBasicMaterial({ color: '#ff8fa3', transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
   sg.ring.position.copy(P.C).add(new THREE.Vector3(.08, -.08, female ? .2 : .07)); bust.add(sg.ring);
   Object.values(sg).forEach(m => { m.visible = false; });
 
-  /* --- chapitre 2 : trois masses --- */
+  /* --- chapitre 2 : trois masses, dans un tissu réaliste --- */
   const masses = new THREE.Group(); masses.visible = false; s.add(masses);
   const mItems = [];
-  const mcol = ['#7fc8ff', '#8ff0b0', '#ff5a6a'];
   [-1, 0, 1].forEach((x, i) => {
     const grp = new THREE.Group(); grp.position.set(x * 1.05, 0, 0); masses.add(grp);
-    const sh = new THREE.Mesh(new THREE.SphereGeometry(.42, 40, 28, 0, Math.PI * 2, 0, Math.PI), fresnelMat(skinGlow, 2.0, 1.0));
-    sh.scale.set(1, 1, .75); grp.add(sh);
-    const base = new THREE.Mesh(new THREE.CircleGeometry(.42, 40), new THREE.MeshBasicMaterial({ color: '#2a3470', transparent: true, opacity: .5 })); base.position.z = -.001; grp.add(base);
-    let geo;
-    if (i === 2) {
-      geo = new THREE.IcosahedronGeometry(.11, 3);
-      const p = geo.attributes.position, v = new THREE.Vector3();
-      for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k); const n = 1 + .28 * Math.sin(v.x * 50) * Math.cos(v.y * 43) + .18 * Math.sin(v.z * 61); v.multiplyScalar(n); p.setXYZ(k, v.x, v.y, v.z); }
-      geo.computeVertexNormals();
-    } else geo = new THREE.SphereGeometry(.1, 32, 24);
-    const mass = new THREE.Mesh(geo, fresnelMat(mcol[i], i === 2 ? .8 : 1.2, 2.2));
-    if (i === 1) mass.scale.set(1.35, .9, .9);
-    const core = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: mcol[i], transparent: true, opacity: i === 2 ? .55 : .25, blending: THREE.AdditiveBlending, depthWrite: false }));
-    core.scale.setScalar(.8); mass.add(core);
+    const half = new THREE.SphereGeometry(.42, 48, 32, 0, Math.PI * 2, 0, Math.PI);
+    const sh = new THREE.Mesh(half, glass(skinCol, .2)); sh.scale.set(1, 1, .75); grp.add(sh);
+    const shr = new THREE.Mesh(half, fresnelMat(skinGlow, 2.0, 1.0)); shr.scale.set(1, 1, .75); grp.add(shr);
+    const base = new THREE.Mesh(new THREE.CircleGeometry(.42, 48), new THREE.MeshBasicMaterial({ color: '#2a3470', transparent: true, opacity: .55 })); base.position.z = -.001; grp.add(base);
+    grp.add(instanced(70, fatMat, (k, d) => {
+      let a, b, c; do { a = rnd() * 2 - 1; b = rnd() * 2 - 1; c = rnd(); } while (a * a + b * b + c * c > .8);
+      d.position.set(a * .36, b * .36, c * .26); d.scale.setScalar(.025 + rnd() * .025);
+    }));
+    for (let k = 0; k < 4; k++) { const a = k * 1.6 + .4; grp.add(tube([V(Math.cos(a) * .25, Math.sin(a) * .25, .05), V(Math.cos(a) * .12, Math.sin(a) * .12, .2), V(0, -.02, .3)], .005, ductMat)); }
+    let mass;
+    if (i === 0) {
+      mass = new THREE.Mesh(new THREE.SphereGeometry(.1, 40, 28), new THREE.MeshPhysicalMaterial({ color: '#a8d8ff', roughness: .04, transparent: true, opacity: .55, clearcoat: 1, clearcoatRoughness: 0, emissive: '#16405e', emissiveIntensity: .4 }));
+      const inner = new THREE.Mesh(new THREE.SphereGeometry(.085, 24, 16), new THREE.MeshBasicMaterial({ color: '#cfeaff', transparent: true, opacity: .25, depthWrite: false })); mass.add(inner);
+    } else if (i === 1) {
+      const g2 = new THREE.SphereGeometry(.1, 48, 32), p = g2.attributes.position, v = new THREE.Vector3();
+      for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k); v.multiplyScalar(1 + .05 * vnoise(v.x * 30, v.y * 30, v.z * 30)); p.setXYZ(k, v.x, v.y, v.z); }
+      g2.computeVertexNormals();
+      mass = new THREE.Mesh(g2, new THREE.MeshPhysicalMaterial({ color: '#f1c7b6', roughness: .35, clearcoat: .4, sheen: .5, sheenColor: new THREE.Color('#ffffff'), emissive: '#3a1a10', emissiveIntensity: .25 }));
+      mass.scale.set(1.35, .9, .9);
+    } else {
+      const g3 = new THREE.IcosahedronGeometry(.1, 4), p = g3.attributes.position, v = new THREE.Vector3();
+      for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k); v.multiplyScalar(1 + .22 * vnoise(v.x * 25, v.y * 25, v.z * 25) + .08 * vnoise(v.x * 70, v.y * 70, v.z * 70)); p.setXYZ(k, v.x, v.y, v.z); }
+      g3.computeVertexNormals();
+      mass = new THREE.Mesh(g3, new THREE.MeshStandardMaterial({ color: '#7d2a36', roughness: .75, emissive: '#3a0610', emissiveIntensity: .45 }));
+      const spikeMat = new THREE.MeshStandardMaterial({ color: '#a23a48', roughness: .7, emissive: '#3a0610', emissiveIntensity: .3 });
+      for (let k = 0; k < 16; k++) {
+        const dir = V(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize(), L = .05 + rnd() * .07;
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(.007, L, 6), spikeMat);
+        sp.position.copy(dir.clone().multiplyScalar(.1 + L / 2)); sp.quaternion.setFromUnitVectors(V(0, 1, 0), dir); mass.add(sp);
+      }
+    }
     mass.position.set(.05, .05, .12); grp.add(mass);
     mItems.push({ grp, mass, home: mass.position.clone(), off: new THREE.Vector3(), mob: [.07, .12, .006][i], touched: false });
   });
@@ -1228,7 +1338,7 @@ function buildBeyond() {
 }
 function setDepth(d) {
   beyond.layers.forEach((list, i) => {
-    const f = i < d ? .06 : i === d ? 1.25 : .35;
+    const f = i < d ? .05 : i === d ? 1.2 : .18;
     list.forEach(({ mat, base }) => { if (mat.uniforms) mat.uniforms.uI.value = base * f; else mat.opacity = base * f; });
   });
 }
@@ -1481,7 +1591,7 @@ async function run() {
   hideBubble();
   await Promise.all([moveCamera([.1, 1.32, 1.5], [0, 1.15, -2], 1.8), tween(1.8, k => { rippleMat.uniforms.uAmp.value = k; }), walkTo(ama, -1.05, -1.5, 1.4, .5)]);
   topicsEl.classList.add('on');
-  say(T.s2);
+  say(T.s2).then(() => setTimeout(prebuildAvatars, 80));
   await new Promise(resolve => {
     topicsEl.querySelectorAll('.topic').forEach(b => b.addEventListener('click', () => {
       blip(700);
@@ -1504,7 +1614,8 @@ async function run() {
 
   // Scène 4 — devant le miroir
   const female = choice.kind === 'femme';
-  avatar = makePerson({ skin: choice.skin, top: female ? '#c98a9a' : '#7d93a6', bottom: female ? '#3b3350' : '#2f3a48', hair: '#1a0f0c', kind: choice.kind });
+  avatar = avatarCache[choice.kind] || buildAvatar(choice.kind);
+  avatar.mats.forEach(m => { if (m.name === 'skin') m.color.set(choice.skin); if (m.name === 'lip') m.color.copy(lipColor(choice.skin)); });
   avatar.g.position.set(0, 0, -0.95); avatar.g.rotation.y = Math.PI;
   avatar.mats.forEach(m => { m.transparent = true; m.opacity = 0; });
   room.add(avatar.g);
@@ -1688,7 +1799,7 @@ async function run() {
 }
 run();
 // outil de test
-if (window.__nocap) window.TH = { choice, touchAll: () => beyond.mItems.forEach(touchMass), get beyond() { return beyond; }, makePerson, room, camera, camTarget, ama, THREE, reachPose, poseArm, stop: () => { drift = false; tweens.clear(); } };
+if (window.__nocap) window.TH = { choice, touchAll: () => beyond.mItems.forEach(touchMass), get beyond() { return beyond; }, makePerson, room, camera, camTarget, ama, THREE, reachPose, poseArm, buildBeyond, stop: () => { drift = false; tweens.clear(); } };
 </script>
 </body>
 </html>
